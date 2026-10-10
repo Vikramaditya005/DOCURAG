@@ -12,6 +12,15 @@ from docurag.schemas import FigureData, FigureDescription
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_VISION_MODEL = "gemini-2.5-flash"
+
+_MIME_BY_SUFFIX = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+
 
 def _is_fakes() -> bool:
     if os.getenv("DOCURAG_FAKES") in ("1", "true", "True"):
@@ -20,6 +29,19 @@ def _is_fakes() -> bool:
         return get_settings().DOCURAG_FAKES
     except Exception:
         return False
+
+
+def _image_part(image_path: Union[Path, str]):
+    """Build a Gemini image part from a file on disk."""
+    from google.genai import types
+
+    path = Path(image_path)
+    mime = _MIME_BY_SUFFIX.get(path.suffix.lower(), "image/png")
+    return types.Part.from_bytes(data=path.read_bytes(), mime_type=mime)
+
+
+def _vision_model(settings) -> str:
+    return getattr(settings, "GEMINI_MODEL", None) or DEFAULT_VISION_MODEL
 
 
 def extract_figures(
@@ -116,7 +138,10 @@ def _strip_json_fence(text: str) -> str:
 
 
 def describe_figure(image_path: Union[Path, str]) -> FigureDescription:
-    """Analyze a figure image with multimodal LLM and produce structured description.
+    """Analyze a figure image with a multimodal LLM and produce a structured description.
+
+    Failures return a generic fallback here, OUTSIDE the cache, so a temporary
+    error (quota, network) is never stored as the permanent description.
 
     Args:
         image_path: Path to the image file on disk.
@@ -124,12 +149,17 @@ def describe_figure(image_path: Union[Path, str]) -> FigureDescription:
     Returns:
         FigureDescription model instance.
     """
-    return _describe_figure_cached(str(image_path))
+    try:
+        return _describe_figure_cached(str(image_path))
+    except Exception as exc:
+        logger.warning("Figure description failed for %s: %s", image_path, exc)
+        return FigureDescription(type="other", caption=f"Figure at {Path(image_path).name}")
 
 
 @disk_cache(namespace="figure_descriptions")
 @with_retry(tries=2, base=0.2)
 def _describe_figure_cached(image_path: str) -> FigureDescription:
+    """Calls the vision model. Raises on any failure so nothing bad gets cached."""
     if _is_fakes():
         return FigureDescription(
             type="bar_chart",
@@ -140,52 +170,48 @@ def _describe_figure_cached(image_path: str) -> FigureDescription:
             visible_text="Performance benchmarks v1.0",
         )
 
-    try:
-        from google import genai
+    from google import genai
 
-        settings = get_settings()
-        if not settings.GEMINI_API_KEY:
-            return FigureDescription(type="other", caption="Vision description unavailable.")
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    settings = get_settings()
+    if not settings.GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not set")
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-        prompt = (
-            "You are indexing a figure from a document so it can be found by text search. "
-            "Describe the image and return ONLY valid JSON with this shape:\n"
-            "{\n"
-            "  \"type\": \"bar_chart|line_chart|pie_chart|table|diagram|photo|scanned_text|other\",\n"
-            "  \"title\": \"<title if visible, else empty>\",\n"
-            "  \"caption\": \"<2-3 sentence description of what the figure shows>\",\n"
-            "  \"key_values\": [{\"label\": \"<x/category/series>\", \"value\": \"<number or text>\", \"unit\": \"<unit or empty>\"}],\n"
-            "  \"relationships\": \"<for diagrams/flowcharts: A -> B -> C; else empty>\",\n"
-            "  \"visible_text\": \"<all legible text in the image>\"\n"
-            "}\n"
-            "Read numbers exactly as shown. If a value is unreadable, omit it. Do not guess."
-        )
-        response = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=[prompt, __import__("google.genai.types", fromlist=["Part"]).Part.from_bytes(data=Path(image_path).read_bytes(), mime_type="image/png" if str(image_path).lower().endswith(".png") else "image/jpeg")],
-        )
-        raw = getattr(response, "text", "") or ""
-        data = json.loads(_strip_json_fence(raw))
+    prompt = (
+        "You are indexing a figure from a document so it can be found by text search. "
+        "Describe the image and return ONLY valid JSON with this shape:\n"
+        "{\n"
+        "  \"type\": \"bar_chart|line_chart|pie_chart|table|diagram|photo|scanned_text|other\",\n"
+        "  \"title\": \"<title if visible, else empty>\",\n"
+        "  \"caption\": \"<2-3 sentence description of what the figure shows>\",\n"
+        "  \"key_values\": [{\"label\": \"<x/category/series>\", \"value\": \"<number or text>\", \"unit\": \"<unit or empty>\"}],\n"
+        "  \"relationships\": \"<for diagrams/flowcharts: A -> B -> C; else empty>\",\n"
+        "  \"visible_text\": \"<all legible text in the image>\"\n"
+        "}\n"
+        "Read numbers exactly as shown. If a value is unreadable, omit it. Do not guess."
+    )
+    response = client.models.generate_content(
+        model=_vision_model(settings),
+        contents=[prompt, _image_part(image_path)],
+    )
+    raw = getattr(response, "text", "") or ""
+    data = json.loads(_strip_json_fence(raw))
 
-        # Hardening: Ensure all required fields exist before validation
-        # to avoid Pydantic validation errors on partial LLM responses.
-        defaults = {
-            "type": "other",
-            "title": "",
-            "caption": "No description provided.",
-            "key_values": [],
-            "relationships": "",
-            "visible_text": ""
-        }
-        for field, default_val in defaults.items():
-            if field not in data or data[field] is None:
-                data[field] = default_val
+    # Hardening: ensure all required fields exist before validation
+    # to avoid Pydantic validation errors on partial LLM responses.
+    defaults = {
+        "type": "other",
+        "title": "",
+        "caption": "No description provided.",
+        "key_values": [],
+        "relationships": "",
+        "visible_text": "",
+    }
+    for field, default_val in defaults.items():
+        if field not in data or data[field] is None:
+            data[field] = default_val
 
-        return FigureDescription.model_validate(data)
-    except Exception as exc:
-        logger.warning("Figure description failed for %s: %s", image_path, exc)
-        return FigureDescription(type="other", caption=f"Figure at {Path(image_path).name}")
+    return FigureDescription.model_validate(data)
 
 
 def transcribe_page(image_path: Union[Path, str]) -> str:
@@ -202,6 +228,7 @@ def transcribe_page(image_path: Union[Path, str]) -> str:
 
     try:
         from google import genai
+
         settings = get_settings()
         if not settings.GEMINI_API_KEY:
             return ""
@@ -210,8 +237,8 @@ def transcribe_page(image_path: Union[Path, str]) -> str:
         prompt = "Transcribe all text from this page exactly as it appears. Preserve layout where possible."
 
         response = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=[prompt, __import__("google.genai.types", fromlist=["Part"]).Part.from_bytes(data=Path(image_path).read_bytes(), mime_type="image/png" if str(image_path).lower().endswith(".png") else "image/jpeg")],
+            model=_vision_model(settings),
+            contents=[prompt, _image_part(image_path)],
         )
         return getattr(response, "text", "") or ""
     except Exception as exc:

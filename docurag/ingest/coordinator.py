@@ -6,7 +6,7 @@ import hashlib
 import logging
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
-
+import re
 from docurag.ingest.pdf_loader import load_image, load_pdf
 from docurag.ingest.text import load_docx, load_txt
 from docurag.schemas import PageData, Chunk
@@ -44,38 +44,75 @@ def iter_document_pages(path: str | Path, document_id: Optional[str] = None) -> 
         yield from load_docx(path_obj, doc_id)
     else:
         raise ValueError(f"Unsupported document extension: {suffix}")
+def _figure_content(fig) -> str:
+    """Build searchable chunk text for a figure, asking the vision model when needed."""
+    if fig.description:
+        return f"Figure: {fig.caption}. Description: {fig.description}"
 
-def document_to_chunks(pages: List[PageData], doc_id: str) -> List[Chunk]:
-    """Convert page data into indexable chunks."""
+    try:
+        from docurag.ingest.vision import describe_figure
+
+        if fig.image_path and Path(fig.image_path).exists():
+            d = describe_figure(fig.image_path)
+            parts = []
+            label = (d.title or "").strip() or (fig.caption or "Figure")
+            parts.append(f"Figure ({d.type}): {label}.")
+            if d.caption:
+                parts.append(f"Description: {d.caption}")
+            if d.visible_text:
+                parts.append(f"Visible text: {d.visible_text}")
+            kv = []
+            for item in (d.key_values or []):
+                if isinstance(item, dict):
+                    kv.append(" ".join(str(item.get(k, "")) for k in ("label", "value", "unit")).strip())
+                else:
+                    kv.append(" ".join(str(getattr(item, k, "")) for k in ("label", "value", "unit")).strip())
+            if kv:
+                parts.append("Key values: " + "; ".join(kv))
+            if d.relationships:
+                parts.append(f"Relationships: {d.relationships}")
+            return " ".join(parts)
+    except Exception as exc:
+        logger.warning("Could not describe figure %s: %s", fig.figure_id, exc)
+
+    return f"Figure: {fig.caption}. Description: No description"
+def _name_tokens(filename: str) -> str:
+    spaced = re.sub(r"[_\-.]+", " ", Path(filename).stem)
+    return f"{filename} {spaced}"
+def document_to_chunks(pages: List[PageData], doc_id: str, filename: str = "") -> List[Chunk]:
+    """Convert page data into indexable chunks, tagged with the source file name."""
+    tag = f"[File: {_name_tokens(filename)}]\n" if filename else ""
     chunks = []
     for page in pages:
         # 1. Main text chunk
         if page.text.strip():
+            content = tag + page.text
             chunks.append(Chunk(
                 chunk_id=f"{doc_id}_p{page.page}_t",
                 document_id=doc_id,
                 source=f"page {page.page}",
                 page=page.page,
                 content_type="text",
-                content=page.text,
-                token_count=len(page.text) // 4 # rough estimate
+                content=content,
+                token_count=len(content) // 4,
             ))
-        
+
         # 2. Table chunks
         for i, table in enumerate(page.tables_md):
+            content = tag + table
             chunks.append(Chunk(
                 chunk_id=f"{doc_id}_p{page.page}_tbl{i}",
                 document_id=doc_id,
                 source=f"page {page.page}",
                 page=page.page,
                 content_type="table",
-                content=table,
-                token_count=len(table) // 4
+                content=content,
+                token_count=len(content) // 4,
             ))
-            
+
         # 3. Figure chunks
         for i, fig in enumerate(page.figures):
-            content = f"Figure: {fig.caption}. Description: {fig.description or 'No description'}"
+            content = tag + _figure_content(fig)
             chunks.append(Chunk(
                 chunk_id=f"{doc_id}_p{page.page}_fig{i}",
                 document_id=doc_id,
@@ -83,12 +120,11 @@ def document_to_chunks(pages: List[PageData], doc_id: str) -> List[Chunk]:
                 page=page.page,
                 content_type="image",
                 content=content,
-                token_count=len(content) // 4
+                token_count=len(content) // 4,
             ))
     return chunks
 
 def ingest_document(path: str | Path, collection_id: str = "default", document_id: Optional[str] = None) -> Dict[str, object]:
-    """Ingest a single document and return a lightweight report."""
     path_obj = Path(path)
     if not path_obj.exists():
         raise FileNotFoundError(f"Document not found: {path_obj}")
@@ -105,7 +141,7 @@ def ingest_document(path: str | Path, collection_id: str = "default", document_i
     store = ChunkStore(embedder=embedder, persistence_path=settings.DOCURAG_STORAGE + "/index")
     store.load()
 
-    chunks = document_to_chunks(pages, document_id)
+    chunks = document_to_chunks(pages, document_id, filename=path_obj.name)
     store.remove_document(document_id)
     store.add_document(document_id, chunks)
     store.save()
