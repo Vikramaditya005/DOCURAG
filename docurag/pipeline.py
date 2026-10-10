@@ -347,6 +347,21 @@ def ingest_file(file_path: str, collection_id: str = "default", document_id: str
     return report
 
 
+def remove_document(document_id: str) -> None:
+    """Remove a document's chunks from the index and persist the change."""
+    settings = get_settings()
+    with _INGEST_LOCK:
+        engine = get_engine()
+        store = ChunkStore(
+            embedder=engine["embedder"],
+            persistence_path=settings.DOCURAG_STORAGE + "/index",
+        )
+        store.load()
+        store.remove_document(str(document_id))
+        store.save()
+        engine["store"] = store
+
+
 def ingest_directory(dir_path: str, collection_id: str = "default") -> Dict[str, Any]:
     """Ingest all supported documents from a directory."""
     path = Path(dir_path)

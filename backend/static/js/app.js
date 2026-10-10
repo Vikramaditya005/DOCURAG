@@ -762,7 +762,7 @@ class ChatController {
         this.drawerContent.innerText = src.snippet || "No text snippet available.";
 
         if (src.thumbnail_url) {
-            this.drawerImage.src = `/media/pages/${src.thumbnail_url}`;
+            this.drawerImage.src = src.thumbnail_url;
             this.drawerImageContainer.classList.remove('hidden');
         } else {
             this.drawerImageContainer.classList.add('hidden');

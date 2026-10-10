@@ -1,5 +1,5 @@
 from django.db import models
-
+from django.conf import settings
 class Document(models.Model):
     STATUS_CHOICES = [
         ('queued', 'Queued'),
@@ -16,7 +16,10 @@ class Document(models.Model):
     error = models.TextField(null=True, blank=True)
     chunk_counts = models.JSONField(default=dict)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='documents', null=True, blank=True,
+    )
     def __str__(self):
         return self.filename
 
@@ -30,6 +33,9 @@ class QueryLog(models.Model):
     sources = models.JSONField()
     agent_trace = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='queries', null=True, blank=True,
+    )
     def __str__(self):
         return f"{self.question[:50]}... ({self.created_at})"

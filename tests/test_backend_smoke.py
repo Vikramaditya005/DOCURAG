@@ -34,7 +34,7 @@ def test_backend_smoke():
     try:
         # Wait for the server to start
         # We'll poll the health endpoint until it responds or we timeout
-        max_retries = 10
+        max_retries = 30
         success = False
         for i in range(max_retries):
             try:

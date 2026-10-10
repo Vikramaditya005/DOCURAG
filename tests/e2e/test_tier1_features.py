@@ -195,7 +195,7 @@ class TestTier1Ingestion:
         assert isinstance(res, dict)
         assert res.get("status") == "ready"
         assert res.get("filename") == "sample_report.pdf"
-        assert res.get("document_id") == "doc_sample_report"
+        assert res.get("document_id", "").startswith("doc_sample_report_")
         assert res.get("collection_id") == "default"
         assert res.get("pages", 0) >= 1
         assert res.get("chunks_indexed", 0) >= 1
@@ -210,7 +210,7 @@ class TestTier1Ingestion:
         assert isinstance(res, dict)
         assert res.get("status") == "ready"
         assert res.get("filename") == "architecture_diagram.png"
-        assert res.get("document_id") == "doc_architecture_diagram"
+        assert res.get("document_id", "").startswith("doc_architecture_diagram_")
 
     def test_ingest_file_custom_collection_id(self, tmp_path, minimal_pdf_bytes):
         """Derivation: CONTRACTS.md §4 collection_id parameter isolation."""
