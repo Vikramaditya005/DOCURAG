@@ -273,6 +273,18 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 9999px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+                /* Auth forms and buttons */
+        .field { width: 100%; border-radius: 0.75rem; padding: 0.65rem 0.9rem; font-size: 0.875rem; outline: none; transition: border-color .2s, box-shadow .2s; }
+        .dark .field { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #f1f5f9; }
+        :root:not(.dark) .field { background: #ffffff; border: 1px solid #cbd5e1; color: #0f172a; }
+        .field:focus { border-color: #22d3ee; box-shadow: 0 0 0 3px rgba(34,211,238,0.18); }
+        .dark .field:-webkit-autofill { -webkit-text-fill-color: #f1f5f9; box-shadow: 0 0 0 1000px #0f172a inset; }
+        .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border-radius: 9999px; padding: .7rem 1.4rem; font-size: .875rem; font-weight: 600; color: #fff; background: linear-gradient(135deg, #0ea5e9, #2563eb); box-shadow: 0 8px 24px rgba(37,99,235,.35); transition: transform .15s, box-shadow .15s; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(37,99,235,.5); }
+        .btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border-radius: 9999px; padding: .7rem 1.4rem; font-size: .875rem; font-weight: 600; transition: background .15s; }
+        .dark .btn-ghost { color: #e2e8f0; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.04); }
+        :root:not(.dark) .btn-ghost { color: #0f172a; border: 1px solid #cbd5e1; background: #fff; }
+        .dark .btn-ghost:hover { background: rgba(255,255,255,.1); }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -316,37 +328,49 @@
     </div>
 
     <!-- ─── HEADER / NAVIGATION ─── -->
-    <header class="sticky top-0 z-50 glass-nav transition-all duration-200">
+        <header class="sticky top-0 z-50 glass-nav transition-all duration-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
-                <!-- Brand: Minimalist Halo Ring -->
                 <div class="flex items-center space-x-3">
-                    <a href="/ask/" class="flex items-center gap-3 group">
+                    <a href="{% if user.is_authenticated %}/ask/{% else %}/{% endif %}" class="flex items-center gap-3 group">
                         <div class="halo-ring"></div>
-                        <span class="text-sm font-semibold tracking-tight text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-300 transition-colors">
-                            DocuRAG
-                        </span>
+                        <span class="text-sm font-semibold tracking-tight text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-300 transition-colors">DocuRAG</span>
                     </a>
                 </div>
 
-                <!-- Center Nav Links with Active Indicators -->
+                {% if user.is_authenticated %}
                 <nav class="hidden md:flex items-center space-x-3 text-xs font-medium tracking-wide">
                     <a href="/ask/" class="px-3 py-1.5 rounded-full transition-all {% block nav_ask %}text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5{% endblock %}">Studio</a>
-                    <a href="/" class="px-3 py-1.5 rounded-full transition-all {% block nav_library %}text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5{% endblock %}">Library</a>
+                    <a href="/library/" class="px-3 py-1.5 rounded-full transition-all {% block nav_library %}text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5{% endblock %}">Library</a>
                     <a href="/history/" class="px-3 py-1.5 rounded-full transition-all {% block nav_history %}text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5{% endblock %}">Insights</a>
                     <button id="openDocsModalBtn" class="px-3 py-1.5 rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5 transition-all cursor-pointer">Docs</button>
                 </nav>
+                {% else %}
+                <nav class="hidden md:flex items-center space-x-3 text-xs font-medium tracking-wide">
+                    <a href="/#features" class="px-3 py-1.5 rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5 transition-all">Features</a>
+                    <a href="/#how-it-works" class="px-3 py-1.5 rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5 transition-all">How it works</a>
+                </nav>
+                {% endif %}
 
-                <!-- Right Controls: Status Pill & Theme Toggle -->
                 <div class="flex items-center space-x-3">
-                    <div id="statusBadge" class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-white/5 border border-slate-300/60 dark:border-white/10 text-[11px] text-cyan-600 dark:text-cyan-300 font-medium cursor-help" title="Active Model: Gemini 3.5 Flash / Nvidia NIM fallback">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-cyan-400 animate-pulse"></span>
-                        <span>Gemini 3.5 Active</span>
-                    </div>
-
-                    <a href="/ask/" class="px-3.5 py-1.5 rounded-full bg-cyan-600 hover:bg-cyan-500 dark:bg-white/10 dark:hover:bg-white/15 text-xs text-white font-medium border border-cyan-500/30 dark:border-white/10 shadow-sm transition-all hover:scale-105">
-                        Launch Studio
-                    </a>
+                    {% if user.is_authenticated %}
+                        {% firstof user.first_name user.username as display_name %}
+                        <div id="statusBadge" class="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-white/5 border border-slate-300/60 dark:border-white/10 text-[11px] text-cyan-600 dark:text-cyan-300 font-medium cursor-help" title="Active Model: Gemini Flash / Nvidia NIM fallback">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-cyan-400 animate-pulse"></span>
+                            <span>Gemini 3.5 Active</span>
+                        </div>
+                        <div class="hidden sm:flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-slate-200/60 dark:bg-white/5 border border-slate-300/60 dark:border-white/10">
+                            <span class="w-6 h-6 rounded-full bg-cyan-600 text-white text-[11px] font-semibold flex items-center justify-center">{{ display_name|slice:":1"|upper }}</span>
+                            <span class="text-xs font-medium text-slate-700 dark:text-slate-200 max-w-[8rem] truncate">{{ display_name }}</span>
+                        </div>
+                        <form method="post" action="{% url 'logout' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="px-3.5 py-1.5 rounded-full text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-200/60 dark:bg-white/5 border border-slate-300/60 dark:border-white/10 hover:bg-slate-300/60 dark:hover:bg-white/10 transition-colors">Log out</button>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'login' %}" class="px-3.5 py-1.5 rounded-full text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors">Log in</a>
+                        <a href="{% url 'signup' %}" class="px-3.5 py-1.5 rounded-full bg-cyan-600 hover:bg-cyan-500 text-xs text-white font-medium shadow-sm transition-all hover:scale-105">Sign up</a>
+                    {% endif %}
 
                     <button id="themeToggle" aria-label="Toggle Theme" class="p-2 rounded-xl bg-slate-200/60 dark:bg-white/5 border border-slate-300/60 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-300/60 dark:hover:bg-white/10 transition-colors" title="Toggle Theme">
                         <svg id="sunIcon" class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z"></path></svg>
@@ -461,7 +485,35 @@
     <!-- Global Toast Container -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
+        {% if user.is_authenticated %}
+    <script>
+        window.CSRF_TOKEN = "{{ csrf_token }}";
+        (function () {
+            const originalFetch = window.fetch;
+            window.fetch = function (input, init) {
+                init = init || {};
+                const method = (init.method || (input && input.method) || 'GET').toUpperCase();
+                const url = typeof input === 'string' ? input : ((input && input.url) || '');
+                const sameOrigin = url.startsWith('/') || url.startsWith(window.location.origin);
+                if (sameOrigin && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+                    const headers = new Headers(init.headers || (input && input.headers) || {});
+                    if (!headers.has('X-CSRFToken')) headers.set('X-CSRFToken', window.CSRF_TOKEN);
+                    init.headers = headers;
+                    init.credentials = init.credentials || 'same-origin';
+                }
+                return originalFetch.call(this, input, init);
+            };
+        })();
+    </script>
     <script src="/static/js/app.js"></script>
+    {% else %}
+    <script>
+        document.getElementById('themeToggle')?.addEventListener('click', function () {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('docurag_theme', isDark ? 'dark' : 'light');
+        });
+    </script>
+    {% endif %}
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

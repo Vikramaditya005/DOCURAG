@@ -343,7 +343,7 @@ class ChatController {
             if (!this.documentSelector) return;
 
             if (docs.length === 0) {
-                this.documentSelector.innerHTML = '<p class="text-xs text-slate-500 py-3 text-center">No documents uploaded yet.<br><a href="/" class="text-cyan-400 underline">Upload in Library</a></p>';
+                this.documentSelector.innerHTML = '<p class="text-xs text-slate-500 py-3 text-center">No documents uploaded yet.<br><a href="/library" class="text-cyan-400 underline">Upload in Library</a></p>';
                 this.updateSelectedDocCount();
                 return;
             }
