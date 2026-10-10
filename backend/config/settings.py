@@ -79,3 +79,25 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework.authentication.SessionAuthentication'],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
 }
+# ---- Docker / production overrides (read from environment) ----
+import os as _os
+
+SECRET_KEY = _os.environ.get("SECRET_KEY", SECRET_KEY)
+DEBUG = _os.environ.get("DEBUG", "1") == "1"
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+STATIC_URL = "/static/"
+STATIC_ROOT = _os.path.join(str(BASE_DIR), "staticfiles")
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
+
+_ws = "whitenoise.middleware.WhiteNoiseMiddleware"
+if _ws not in MIDDLEWARE:
+    _sec = "django.middleware.security.SecurityMiddleware"
+    MIDDLEWARE.insert(MIDDLEWARE.index(_sec) + 1 if _sec in MIDDLEWARE else 0, _ws)
+
+DATABASES["default"]["NAME"] = _os.environ.get("SQLITE_PATH", str(DATABASES["default"]["NAME"]))
+MEDIA_ROOT = _os.environ.get("DOCURAG_STORAGE", MEDIA_ROOT)

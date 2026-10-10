@@ -1,0 +1,29 @@
+services:
+  docurag:
+    build: .
+    image: docurag:latest
+    ports:
+      - "8000:8000"
+    # GEMINI_API_KEY, SECRET_KEY and DEBUG come from your local .env file.
+    # Keep DEBUG=0 while the app is reachable through the public tunnel.
+    env_file: .env
+    environment:
+      ALLOWED_HOSTS: "localhost,127.0.0.1,.trycloudflare.com"
+      CSRF_TRUSTED_ORIGINS: "https://*.trycloudflare.com,http://localhost:8000"
+    volumes:
+      - docurag-data:/data
+    restart: unless-stopped
+
+  # Free Cloudflare quick tunnel. Get the public link with:
+  #   docker compose logs tunnel
+  # The link changes whenever this container restarts.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://docurag:8000
+    depends_on:
+      docurag:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  docurag-data:
