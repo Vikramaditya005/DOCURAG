@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-
+from django.views.generic import RedirectView
 from backend.config.forms import EmailLoginForm
 from backend.config.views import landing, signup, library, ask, history
 
@@ -14,6 +14,7 @@ urlpatterns = [
     path('library/', library, name='library'),
     path('ask/', ask, name='ask'),
     path('history/', history, name='history'),
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon.ico', permanent=True)),
     path('signup/', signup, name='signup'),
     path('login/', auth_views.LoginView.as_view(
         template_name='pages/login.html',
